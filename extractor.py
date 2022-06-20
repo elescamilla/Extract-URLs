@@ -1,7 +1,5 @@
-import ctypes
 import logging
 from typing import Set, List
-import os
 
 import PyPDF2.pdf
 import pypdfium2 as pdfium
@@ -70,33 +68,18 @@ class Extractor:
 
     """
     urls = set()
-    buf_len = 2048
-    buffer = (ctypes.c_ushort * buf_len)()
-    buffer_ = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ushort))
-    
-    doc = pdfium.FPDF_LoadDocument(fp, None)
-    page_count = pdfium.FPDF_GetPageCount(doc)
-    for i in range(page_count):
-      # load PDF page
-      page = pdfium.FPDF_LoadPage(doc, i)
-      # load text in PDF page
-      text = pdfium.FPDFText_LoadPage(page)
-      # Load links in PDF text
-      links = pdfium.FPDFLink_LoadWebLinks(text)
-      link_count = pdfium.FPDFLink_CountWebLinks(links)
-      # get each URL
-      for j in range(link_count):
-        url_length = pdfium.FPDFLink_GetURL(links, j, buffer_, buf_len)
-        url_nums = buffer[:url_length - 1]
-        url = "".join(map(chr, url_nums)).strip()
+    pdf = pdfium.PdfDocument(fp)
+    for i in range( len(pdf) ):
+      page = pdf.get_page(i)
+      textpage = page.get_textpage()
+      for link in textpage.get_links():
         try:
-          urls.add(self.util.canonicalize_url(url))
+          urls.add(self.util.canonicalize_url(link.strip()))
         except URLError as e:
           logging.debug(e)
-      pdfium.FPDFLink_CloseWebLinks(links)
-      pdfium.FPDFText_ClosePage(text)
-      pdfium.FPDF_ClosePage(page)
-    pdfium.FPDF_CloseDocument(doc)
+      textpage.close()
+      page.close()
+    pdf.close()
     return urls
 
   def extract_all_urls(self, fp: str) -> List[str]:
